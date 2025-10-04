@@ -30,7 +30,7 @@ router = APIRouter(prefix="/movies", tags=["movies"])
 
 async def _get_or_create_country(session: AsyncSession, code: str) -> CountryModel:
     normalized_code = (code or "").strip().upper()
-    if not normalized_code or len(normalized_code) not in (2, 3):
+    if not (normalized_code.isalpha() and len(normalized_code) in (2, 3)):
         raise HTTPException(status_code=400, detail="Invalid input data.")
 
     res = await session.execute(

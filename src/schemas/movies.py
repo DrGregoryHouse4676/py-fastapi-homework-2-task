@@ -67,9 +67,9 @@ class MovieCreateSchema(BaseModel):
     budget: float = Field(..., ge=0)
     revenue: float = Field(..., ge=0)
     country: str = Field(..., min_length=2, max_length=3)
-    genres: List[str] = Field(...)
-    actors: List[str] = Field(...)
-    languages: List[str] = Field(...)
+    genres: List[str]
+    actors: List[str]
+    languages: List[str]
 
     @field_validator("date")
     @classmethod
@@ -77,6 +77,15 @@ class MovieCreateSchema(BaseModel):
         if v > dt.date.today() + dt.timedelta(days=365):
             raise ValueError("date too far")
         return v
+
+    @field_validator("country", mode="before")
+    @classmethod
+    def _country_code_valid(cls, v: str) -> str:
+        code = (v or "").strip().upper()
+        # ✅ допускає 2 або 3 літери, лише алфавітні символи
+        if not (code.isalpha() and len(code) in (2, 3)):
+            raise ValueError("invalid country code")
+        return code
 
 
 class MovieUpdateSchema(BaseModel):
@@ -87,6 +96,10 @@ class MovieUpdateSchema(BaseModel):
     status: Optional[MovieStatusEnum] = None
     budget: Optional[float] = Field(None, ge=0)
     revenue: Optional[float] = Field(None, ge=0)
+    country: Optional[str] = Field(None, min_length=2, max_length=3)
+    genres: Optional[List[str]] = None
+    actors: Optional[List[str]] = None
+    languages: Optional[List[str]] = None
 
     model_config = ConfigDict(extra="forbid")
 
