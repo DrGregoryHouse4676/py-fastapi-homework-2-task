@@ -1,14 +1,9 @@
-from __future__ import annotations
-
 import datetime as dt
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from database.models import MovieStatusEnum
-
-
-date = dt.date
 
 
 class CountrySchema(BaseModel):
@@ -29,7 +24,7 @@ class NamedEntitySchema(BaseModel):
 class MovieListItemSchema(BaseModel):
     id: int
     name: str
-    date: date
+    date: dt.date
     score: float
     overview: Optional[str] = None
 
@@ -42,6 +37,8 @@ class PaginatedMovieListSchema(BaseModel):
     total_items: int
     prev_page: Optional[str]
     next_page: Optional[str]
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class MovieDetailSchema(BaseModel):
@@ -70,9 +67,16 @@ class MovieCreateSchema(BaseModel):
     budget: float = Field(..., ge=0)
     revenue: float = Field(..., ge=0)
     country: str = Field(..., min_length=2, max_length=3)
-    genres: List[str] = Field(default_factory=list)
-    actors: List[str] = Field(default_factory=list)
-    languages: List[str] = Field(default_factory=list)
+    genres: List[str] = Field(...)
+    actors: List[str] = Field(...)
+    languages: List[str] = Field(...)
+
+    @field_validator("date")
+    @classmethod
+    def _date_not_too_future(cls, v: dt.date) -> dt.date:
+        if v > dt.date.today() + dt.timedelta(days=365):
+            raise ValueError("date too far")
+        return v
 
 
 class MovieUpdateSchema(BaseModel):
@@ -83,12 +87,15 @@ class MovieUpdateSchema(BaseModel):
     status: Optional[MovieStatusEnum] = None
     budget: Optional[float] = Field(None, ge=0)
     revenue: Optional[float] = Field(None, ge=0)
-    country: Optional[str] = Field(default=None, min_length=2, max_length=3)
-    genres: Optional[List[str]] = None
-    actors: Optional[List[str]] = None
-    languages: Optional[List[str]] = None
 
     model_config = ConfigDict(extra="forbid")
+
+    @field_validator("date")
+    @classmethod
+    def _date_not_too_future_update(cls, v: Optional[dt.date]) -> Optional[dt.date]:
+        if v is not None and v > dt.date.today() + dt.timedelta(days=365):
+            raise ValueError("date too far")
+        return v
 
 
 MovieShortSchema = MovieListItemSchema

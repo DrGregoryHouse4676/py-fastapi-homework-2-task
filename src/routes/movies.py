@@ -30,7 +30,7 @@ router = APIRouter(prefix="/movies", tags=["movies"])
 
 async def _get_or_create_country(session: AsyncSession, code: str) -> CountryModel:
     normalized_code = (code or "").strip().upper()
-    if not normalized_code:
+    if not normalized_code or len(normalized_code) not in (2, 3):
         raise HTTPException(status_code=400, detail="Invalid input data.")
 
     res = await session.execute(
@@ -123,7 +123,14 @@ async def list_movies(
 async def create_movie(
     movie_in: MovieCreateSchema, db: AsyncSession = Depends(get_db)
 ) -> MovieDetailSchema:
-    if movie_in.date > (date.today() + timedelta(days=366)):
+    if movie_in.date > (date.today() + timedelta(days=365)):
+        raise HTTPException(status_code=400, detail="Invalid input data.")
+
+    if len(movie_in.name) > 255:
+        raise HTTPException(status_code=400, detail="Invalid input data.")
+    if not (0 <= movie_in.score <= 100):
+        raise HTTPException(status_code=400, detail="Invalid input data.")
+    if movie_in.budget < 0 or movie_in.revenue < 0:
         raise HTTPException(status_code=400, detail="Invalid input data.")
 
     dup = await db.scalar(
@@ -226,28 +233,24 @@ async def update_movie(
     if movie is None:
         raise HTTPException(status_code=404, detail="Movie with the given ID was not found.")
 
-    data = movie_in.model_dump(exclude_unset=True)
+    data = movie_in.model_dump(exclude_unset=True) \
+        if hasattr(movie_in, "model_dump")\
+        else movie_in.dict(exclude_unset=True)
+
+    allowed = {"name", "date", "score", "overview", "status", "budget", "revenue"}
+    data = {k: v for k, v in data.items() if k in allowed}
 
     if "date" in data and data["date"] is not None:
-        if data["date"] > (date.today() + timedelta(days=366)):
+        if data["date"] > (date.today() + timedelta(days=365)):
             raise HTTPException(status_code=400, detail="Invalid input data.")
-
-    if "country" in data:
-        code = data.pop("country")
-        if code is not None:
-            movie.country = await _get_or_create_country(db, code)
-
-    if "genres" in data:
-        names = data.pop("genres") or []
-        movie.genres = await _get_or_create_named_entities(db, GenreModel, names)
-
-    if "actors" in data:
-        names = data.pop("actors") or []
-        movie.actors = await _get_or_create_named_entities(db, ActorModel, names)
-
-    if "languages" in data:
-        names = data.pop("languages") or []
-        movie.languages = await _get_or_create_named_entities(db, LanguageModel, names)
+    if "name" in data and data["name"] is not None and len(data["name"]) > 255:
+        raise HTTPException(status_code=400, detail="Invalid input data.")
+    if "score" in data and data["score"] is not None and not (0 <= data["score"] <= 100):
+        raise HTTPException(status_code=400, detail="Invalid input data.")
+    if "budget" in data and data["budget"] is not None and data["budget"] < 0:
+        raise HTTPException(status_code=400, detail="Invalid input data.")
+    if "revenue" in data and data["revenue"] is not None and data["revenue"] < 0:
+        raise HTTPException(status_code=400, detail="Invalid input data.")
 
     for field, value in data.items():
         if value is not None:
